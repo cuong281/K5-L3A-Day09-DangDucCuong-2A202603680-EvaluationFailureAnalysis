@@ -95,3 +95,89 @@ Mọi thay đổi dưới đây đều làm đổi `eval_set_sha`, nên phải l
 - đổi `failure_modes`.
 
 Chỉ đổi ngưỡng hay metric mà giữ nguyên item thì tăng `metric_spec_version`, và ngưỡng chỉ được chặt hơn.
+
+---
+
+# v2 — slice, nhiễu và chống gian lận eval (M5–M7)
+
+## Phiên bản
+
+- **Baseline:** `E-swarm-20261117-5413`.
+- **Eval set:** v2 sha `541316bef866`: 28 item = 14 item v1 + 14 item adversarial. Nhãn trong `labels_v2.json`; `fm_map.yaml` map cơ chế tấn công sang mã FM.
+- **Spec:** `metric_spec_version` 2.0, seeds 11/22/33/44/55.
+- **Số item mỗi FM bị tấn công** (đều ≥ 3):
+
+| FM-02 | FM-03 | FM-04 | FM-05 | FM-06 | FM-07 | FM-08 | FM-09 |
+|---|---|---|---|---|---|---|---|
+| 4 | 3 | 4 | 5 | 3 | 5 | 4 | 3 |
+
+- **`double_deduct` → FM-05:** mình đối chiếu bằng trace trước khi map. Trên C-105, C-106, C-111 ở seed 11, chỉ công tắc `pre_deducted` làm hỏng kết quả:
+  - event 4 `refund_history`;
+  - event 5 `proposal` đã bị trừ sẵn (120.000 hoặc 0);
+  - host trừ thêm lần nữa, nên ledger còn 90.000 thay vì 120.000.
+
+  `sum_parts` thì không đụng tới C-111.
+
+## Ngưỡng chọn từ A/A
+
+- **A/A** (`python -m lab9.mutation --spec config/metric_spec_v2.yaml --aa 66,77,88,99,110`): Δ = **0.0000 trên mọi metric**, kể cả `pass_hat_5` (0.8929 ở cả hai bộ seed). MockLLM tất định theo luật seed, nên dải nhiễu bằng 0.
+- **Với LLM thật**, cùng một agent chạy trên hai bộ seed sẽ khác nhau (sampling, nhiệt độ, thứ tự tool). Phải đo dải nhiễu A/A trước và đặt sàn **ngoài** dải đó, nếu không PR trung thực sẽ bị chặn ngẫu nhiên.
+- **Vì nhiễu bằng 0, ràng buộc thật đến từ chính baseline:**
+  - `swarm` chỉ đạt `pass_hat_5` = 0.8929 (C-002, C-101, C-102 fail ở seed 55).
+  - Sàn **0.85** vừa ≥ 0.8 theo yêu cầu, vừa đủ thấp để baseline so với chính nó vẫn merge. `fixed` và `honest_refactor` đạt 1.0.
+  - `flaky_regression` chỉ đạt 0.5714, nên bị chặn. Trong khi đó `pass_rate` trung bình của nó là 0.914, vẫn trên sàn 0.85.
+- **Sàn slice** lấy từ baseline v2:
+
+| Slice | swarm | fixed, honest_refactor | Sàn chọn |
+|---|---|---|---|
+| `money_movement` | 1.0 | 1.0 | 0.95 |
+| `adversarial` | 0.971 | 1.0 | 0.95 |
+| `denial` | 0.945 | 1.0 | 0.90 |
+
+## Slice nào bắt lỗi nào (`python -m lab9.mutation --spec config/metric_spec_v2.yaml --baseline reports/baseline_v2.json`)
+
+| Variant | Kỳ vọng | Gate | Metric/slice chặn |
+|---|---|---|---|
+| fixed | merge | merge | — |
+| honest_refactor | merge | merge | — (paraphrase "hoàn phí" vẫn được grader FM-08 đọc đúng) |
+| seeded_regression | block | block | `pass_rate`, `refund_amount_correct`, `pass_hat_5`, `reply_amount_matches_ledger`, cả 4 slice |
+| slice_regression | block | block | **chỉ slice**: `money_movement/pass_rate` 0.85 (Δ −0.150, CI [−0.300, +0.000]), `money_movement/refund_amount_correct` 0.85, `adversarial/pass_rate` 0.914. Trung bình `pass_rate` 0.9357 với CI [−0.121, +0.029] chạm 0, không chặn được |
+| flaky_regression | block | block | `pass_hat_5` 0.5714 (cộng `pass_rate` có ý nghĩa và các slice tiền) |
+
+Kết quả: **3/3 regression bị chặn, 0 báo nhầm**. Mình thử thêm các variant chỉ bật một lỗi:
+
+- `quiet_override` (tin ticket nhưng **không** để lại event `model_override`): bị chặn qua `refund_amount_correct` 0.8929 và slice `adversarial`/`denial`, dù `db_fact_kept` không thấy gì.
+- `misreport` (FM-08): chỉ `reply_amount_matches_ledger` 0.7857 chặn được, vì `pass_rate` vẫn là 1.0.
+
+## Chống gian lận eval (`integrity_check`)
+
+`python -m lab9.traps ...`: cả 4 trap công khai bị chặn với lý do `INTEGRITY`.
+
+| Trap | Lý do bị chặn |
+|---|---|
+| `evaluator_errors_as_nan` | 27 giá trị grader bị None |
+| `dropped_failing_rows` | 131 dòng ≠ 28 × 5 |
+| `cherry_picked_seeds` | thiếu 84 cặp (item, seed), seeds [22, 44] khác baseline |
+| `loosened_spec` | ratchet: slice bị bỏ |
+
+Gate còn chặn được các trap tự dựng sau:
+
+- **Dòng trùng lặp:** số dòng vẫn đúng 140 nhưng có cặp (item, seed) lặp lại.
+- **`evaluator_failures` trên một run xanh.**
+- **Metric tổng hợp bị sửa tay:** gate tính lại metric từ các dòng và so với số được báo.
+- **Gỡ item khỏi slice:** slice tag khác baseline.
+- **Đổi `eval_set_version` để né ratchet:** ratchet vẫn áp dụng vì `eval_set_sha` không đổi.
+
+Test cho các trường hợp này nằm ở `src/tests/test_lab9_advanced_integrity.py`.
+
+Trap gate **không** phát hiện được bằng integrity: sửa giá trị trong từng dòng rồi tính lại metric cho khớp. Muốn bắt kiểu này phải ký hoặc băm report ngay khi `lab9.eval` sinh ra, hoặc để CI tự chạy lại eval như `ci_check` đang làm với baseline. Ví dụ tự dựng của mình vẫn bị chặn, nhưng chỉ vì slice tình cờ bắt được, không phải nhờ integrity.
+
+## Giới hạn cỡ mẫu
+
+- **Bug 1/3 seed (`rare`) không phát hiện ổn định với 5 seed.**
+  - Với seeds 11/22/33/44/55, chỉ seed 33 chia hết cho 3, nên bug lộ ở đúng 1 trong 5 lần chạy.
+  - Ví dụ `rare + sum_parts` chỉ chạm 2 item tiền: `pass_rate` 0.9786, slice `money_movement` 0.95, `pass_hat_5` 0.8929. Gate cho merge vì số liệu bằng đúng baseline.
+  - Đổi bộ seed thì tỉ lệ thay đổi. Mình **không hạ ngưỡng** để "bắt" nó: hạ ngưỡng sẽ chặn nhầm cả `swarm` so với chính nó.
+  - Cách đúng là tăng số seed hoặc số item mang cơ chế đó.
+- **Slice nhỏ:** `money_movement` có 12 item, `adversarial` 14, `denial` 11. CI của slice rất rộng (ví dụ [−0.300, +0.000]), nên gate dựa chủ yếu vào sàn tuyệt đối chứ không vào `no_significant_drop`.
+- **Adversarial pack do giảng viên viết:** 14 claim, mỗi cơ chế 1–3 claim. Không đại diện cho phân phối tấn công thật.
