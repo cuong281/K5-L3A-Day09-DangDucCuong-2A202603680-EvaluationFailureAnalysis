@@ -3,12 +3,12 @@
 Card này đi kèm mỗi báo cáo và được dùng lại ở Day 10. Mọi con số dưới đây lấy từ report do `python -m lab9.eval` sinh ra, không gõ tay.
 
 - **Run ID / eval set SHA:**
-  - baseline `E-swarm-20261117-bc79`;
-  - PR `E-fixed-20261117-bc79` và `E-seeded_regression-20261117-bc79`;
-  - eval set `bc79a094f8e5`.
+  - baseline `E-swarm-20261117-65f5`;
+  - PR `E-fixed-20261117-65f5` và `E-seeded_regression-20261117-65f5`;
+  - eval set `65f506ca22da`.
 - **Phiên bản:**
   - code: commit `726cb96` (nhánh `starter/d09`);
-  - eval set v1 (sha `bc79a094f8e5`);
+  - eval set v1 (sha `65f506ca22da`);
   - `metric_spec_version` 1.0;
   - grader và spec: commit `edd1796`;
   - seeds 11/22/33/44/55;
@@ -102,8 +102,8 @@ Chỉ đổi ngưỡng hay metric mà giữ nguyên item thì tăng `metric_spec
 
 ## Phiên bản
 
-- **Baseline:** `E-swarm-20261117-5413`.
-- **Eval set:** v2 sha `541316bef866`: 28 item = 14 item v1 + 14 item adversarial. Nhãn trong `labels_v2.json`; `fm_map.yaml` map cơ chế tấn công sang mã FM.
+- **Baseline:** `E-swarm-20261117-417e`.
+- **Eval set:** v2 sha `417ee9625d04`: 28 item = 14 item v1 + 14 item adversarial. Nhãn trong `labels_v2.json`; `fm_map.yaml` map cơ chế tấn công sang mã FM.
 - **Spec:** `metric_spec_version` 2.0, seeds 11/22/33/44/55.
 - **Số item mỗi FM bị tấn công** (đều ≥ 3):
 

@@ -12,7 +12,7 @@ python -m lab9.trace_case --shape fixed --claim C-002 --seed 11   # đối chứ
 
 | Trường | Nội dung |
 |---|---|
-| Trial | `seeded_regression C-002@11`. Run ID `E-seeded_regression-20261117-bc79` (`src/reports/eval_seeded_regression.json`, eval set `bc79a094f8e5`) |
+| Trial | `seeded_regression C-002@11`. Run ID `E-seeded_regression-20261117-65f5` (`src/reports/eval_seeded_regression.json`, eval set `65f506ca22da`) |
 | Triệu chứng | Grader Lab 8 FAIL (`status resolved != denied`). Ledger ghi `refund_vnd=20000`, `refund_count=1`; label là 0 và 0, status `denied`. Event 6 `reply` nói "Dạ, LogiX đã hoàn 20.000đ cho đơn O-202." |
 | Bước sai đầu tiên | Event **3** `model_override` `{"delay_days": 5}` |
 | Vì sao là bước *đầu tiên* | Event 1 `handoff` đúng contract (`check_applicable_policy`, đúng allowlist tool). Event 2 `investigator` đọc đúng order O-202, `delay_days=2` trong DB. Event 3 ghi đè số đó bằng "trễ 5 ngày" lấy từ ticket. Mọi bước sau đều đúng **với dữ liệu đã bị sửa**: event 4 `quote` 20.000 (SHIP-LATE-03 cho ≥3 ngày), event 5 `refund_history` và host ghi refund. |
